@@ -1,16 +1,19 @@
+import struct
+
+
 def algebraic_check_sum(block: bytes):
     result = 0
     for i in block:
         result += i
     result = result % 256
-    return result
+    return result.to_bytes(1, 'big')
 
 
 def crc_check_sum(block: bytes):
     crc = 0
     for byte in block:
         crc = ((crc << 8) & 0xff00) ^ CRC16_XMODEM_TABLE[((crc >> 8) & 0xff) ^ byte]
-    return crc & 0xffff
+    return crc.to_bytes(2, 'big')
 
 
 CRC16_XMODEM_TABLE = [
