@@ -1,6 +1,7 @@
 from enum import Enum
 
 import serial as ser
+
 from check_sum import algebraic_check_sum, crc_check_sum
 
 SOH = b'\x01'
@@ -13,38 +14,87 @@ CRC = b'\x43'
 
 
 class CheckSumEnum(Enum):
-    algebraic = 0
-    CRC = 1
+    algebraic = SOH
+    crc = CRC
 
 
-def prepare_packets(data: bytes, check_sum: CheckSumEnum) -> [bytes]:
+class ReceiverDoesNotStartTransferException(Exception):
+    pass
+
+
+class ReceiverSendUnexpectedResponseException(Exception):
+    pass
+
+
+def initialize_serial(port: str, baudrate: int=9600, timeout=3):
+    serial_port = ser.Serial()
+    serial_port.baudrate = baudrate
+    serial_port.port = port
+    serial_port.timeout = timeout
+    serial_port.parity = ser.PARITY_NONE
+    serial_port.stopbits = ser.STOPBITS_ONE
+    serial_port.bytesize = ser.EIGHTBITS
+    serial_port.open()
+    return serial_port
+
+
+def send(serial_port: ser.Serial, data: bytes):
+    check_sum_type = wait_for_start_sending_and_get_check_sum_type(serial_port)
+    packets = prepare_packets(data, check_sum_type)
+
+    packet_number = 0
+    while packet_number < len(packets):
+        serial_port.write(packets[packet_number])
+
+        # when receiver sends NAK send packer another time
+        response = serial_port.read(1)
+        if response == ACK:
+            packet_number += 1
+        elif response == NAK:
+            continue
+        else:
+            raise ReceiverSendUnexpectedResponseException
+
+    response = None
+    while response != ACK:
+        serial_port.write(EOT)
+        response = serial_port.read()
+
+
+def wait_for_start_sending_and_get_check_sum_type(serial_port: ser.Serial) -> CheckSumEnum:
+    for i in range(6):
+        message = serial_port.read(1)
+        if message == NAK:
+            return CheckSumEnum.algebraic
+        elif message == CRC:
+            return CheckSumEnum.crc
+
+    raise ReceiverDoesNotStartTransferException
+
+
+def prepare_packets(data: bytes, check_sum_type: CheckSumEnum) -> [bytes]:
     # split data intro 128 bytes long blocks
     blocks = [data[i:i + 128] for i in range(0, len(data), 128)]
 
     packets = []
     for packet_number in range(len(blocks)):
         packet = bytearray()
+        packet += create_header(check_sum_type, packet_number)
 
-        if check_sum == CheckSumEnum.algebraic:
-            packet += bytearray(SOH)
-        elif check_sum == CheckSumEnum.CRC:
-            packet += bytearray(CRC)
-
-        # append packet number and it's compliment
-        packet.append(packet_number % 255)
-        packet.append(255 - (packet_number % 255))
+        # fill last packet with ^z to make it 128 byte length
+        if len(blocks[packet_number]) < 128:
+            blocks[packet_number] = fill_block_with_sub(blocks[packet_number])
 
         # append data block
         packet += bytearray(blocks[packet_number])
 
-        # calculate check sum
+        # calculate check sum and append it to packet
         calculated_check_sum = None
-        if check_sum == CheckSumEnum.algebraic:
+        if check_sum_type == CheckSumEnum.algebraic:
             calculated_check_sum = algebraic_check_sum(blocks[packet_number])
-        elif check_sum == CheckSumEnum.CRC:
+        elif check_sum_type == CheckSumEnum.crc:
             calculated_check_sum = crc_check_sum(blocks[packet_number])
 
-        # and append it to packet
         packet += bytearray(calculated_check_sum)
 
         # append packet to packet list
@@ -52,3 +102,24 @@ def prepare_packets(data: bytes, check_sum: CheckSumEnum) -> [bytes]:
 
     return packets
 
+
+def create_header(check_sum_type: CheckSumEnum, packet_number: int) -> bytearray:
+    # append checkSumType
+    header = bytearray(check_sum_type.value)
+
+    # packet number starts at 1 when is lower than 255
+    packet_number += 1
+
+    # append packet number and it's compliment
+    header.append(packet_number % 255)
+    header.append(255 - (packet_number % 255))
+
+    return header
+
+
+def fill_block_with_sub(block: bytes):
+    block = bytearray(block)
+    for i in range(128 - len(block)):
+        block += bytearray(SUB)
+
+    return bytes(block)
