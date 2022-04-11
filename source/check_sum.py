@@ -1,6 +1,3 @@
-import struct
-
-
 def algebraic_check_sum(block: bytes):
     result = 0
     for i in block:

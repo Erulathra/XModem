@@ -30,7 +30,6 @@ def main():
 
     port_name = "/dev/pts/3"
     baudrate = 9600
-    timeout = 3
 
     serial_port = xmodem.initialize_serial(port_name, baudrate)
     xmodem.send(serial_port, bytes(test, 'ascii'))

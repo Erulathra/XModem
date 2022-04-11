@@ -2,6 +2,7 @@ from enum import Enum
 
 import serial as ser
 
+import check_sum
 from check_sum import algebraic_check_sum, crc_check_sum
 
 SOH = b'\x01'
@@ -14,7 +15,7 @@ CRC = b'\x43'
 
 
 class CheckSumEnum(Enum):
-    algebraic = SOH
+    algebraic = NAK
     crc = CRC
 
 
@@ -22,11 +23,27 @@ class ReceiverDoesNotStartTransferException(Exception):
     pass
 
 
+class SenderDoesNotAcceptTransferException(Exception):
+    pass
+
+
+class WrongPacketNumberException(Exception):
+    pass
+
+
+class WrongCheckSumException(Exception):
+    pass
+
+
+class WrongHeaderException(Exception):
+    pass
+
+
 class ReceiverSendUnexpectedResponseException(Exception):
     pass
 
 
-def initialize_serial(port: str, baudrate: int=9600, timeout=3):
+def initialize_serial(port: str, baudrate: int = 9600, timeout=3):
     serial_port = ser.Serial()
     serial_port.baudrate = baudrate
     serial_port.port = port
@@ -105,7 +122,7 @@ def prepare_packets(data: bytes, check_sum_type: CheckSumEnum) -> [bytes]:
 
 def create_header(check_sum_type: CheckSumEnum, packet_number: int) -> bytearray:
     # append checkSumType
-    header = bytearray(check_sum_type.value)
+    header = bytearray(SOH)
 
     # packet number starts at 1 when is lower than 255
     packet_number += 1
@@ -123,3 +140,45 @@ def fill_block_with_sub(block: bytes):
         block += bytearray(SUB)
 
     return bytes(block)
+
+
+def receive(serial_port: ser.Serial, check_sum_type: CheckSumEnum) -> bytes:
+    result = bytearray()
+    # Wait for sender response
+    for i in range(20):
+        serial_port.write(check_sum_type.value)
+        # read packet
+        packet = None
+
+
+def read_package(serial_port: ser.Serial, check_sum_type: CheckSumEnum):
+    if check_sum_type == CheckSumEnum.algebraic:
+        packet = serial_port.read(132)
+    else:
+        packet = serial_port.read(133)
+
+    if len(packet) == 0:
+        raise SenderDoesNotAcceptTransferException
+
+    packet_number = 1
+    response = None
+    while response != EOT:
+
+        if packet[1] != SOH:
+            raise WrongHeaderException
+        elif packet_number % 255 != packet[2]:
+            raise WrongPacketNumberException
+
+        block = None
+        message_sum = None
+        if check_sum_type == CheckSumEnum.algebraic:
+            block = packet[2:-1]
+            message_sum = packet[-1]
+            calculated_sum = check_sum.algebraic_check_sum(block)
+        else:
+            block = packet[2:-2]
+            message_sum = packet[-2:]
+            calculated_sum = check_sum.crc_check_sum(block)
+
+        if message_sum != calculated_sum:
+            raise WrongCheckSumException

@@ -28,9 +28,8 @@ def main():
            "A wszystko przepasane jakby wstega, miedza " \
            "Zielona, na niej z rzadka ciche grusze siedza."
 
-    port_name = "/dev/pts/3"
+    port_name = "/dev/pts/4"
     baudrate = 9600
-    timeout = 3
 
     serial_port = xmodem.initialize_serial(port_name, baudrate)
     xmodem.send(serial_port, bytes(test, 'ascii'))
