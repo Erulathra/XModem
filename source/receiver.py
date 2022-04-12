@@ -32,8 +32,9 @@ def main():
     baudrate = 9600
 
     serial_port = xmodem.initialize_serial(port_name, baudrate)
-    xmodem.send(serial_port, bytes(test, 'ascii'))
-
+    data = xmodem.receive(serial_port, xmodem.CheckSumEnum.algebraic)
+    print("Cała wiadomość: ")
+    print(data.decode("ascii"))
     serial_port.close()
 
 

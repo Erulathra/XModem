@@ -1,9 +1,9 @@
 from enum import Enum
+from itertools import count
 
 import serial as ser
 
 import check_sum
-from check_sum import algebraic_check_sum, crc_check_sum
 
 SOH = b'\x01'
 EOT = b'\x04'
@@ -17,30 +17,6 @@ CRC = b'\x43'
 class CheckSumEnum(Enum):
     algebraic = NAK
     crc = CRC
-
-
-class ReceiverDoesNotStartTransferException(Exception):
-    pass
-
-
-class SenderDoesNotAcceptTransferException(Exception):
-    pass
-
-
-class WrongPacketNumberException(Exception):
-    pass
-
-
-class WrongCheckSumException(Exception):
-    pass
-
-
-class WrongHeaderException(Exception):
-    pass
-
-
-class ReceiverSendUnexpectedResponseException(Exception):
-    pass
 
 
 def initialize_serial(port: str, baudrate: int = 9600, timeout=3):
@@ -57,23 +33,28 @@ def initialize_serial(port: str, baudrate: int = 9600, timeout=3):
 
 def send(serial_port: ser.Serial, data: bytes):
     check_sum_type = wait_for_start_sending_and_get_check_sum_type(serial_port)
+    print(f"Starting transmission with {check_sum_type}")
     packets = prepare_packets(data, check_sum_type)
 
     packet_number = 0
     while packet_number < len(packets):
         serial_port.write(packets[packet_number])
 
-        # when receiver sends NAK send packer another time
+        # when receiver sends NAK send packet another time
         response = serial_port.read(1)
         if response == ACK:
+            print(f"{packet_number} received ACK")
             packet_number += 1
         elif response == NAK:
+            print(f"{packet_number} received NAK")
             continue
         else:
+            print(response)
             raise ReceiverSendUnexpectedResponseException
 
     response = None
     while response != ACK:
+        print("writing EOT")
         serial_port.write(EOT)
         response = serial_port.read()
 
@@ -106,12 +87,7 @@ def prepare_packets(data: bytes, check_sum_type: CheckSumEnum) -> [bytes]:
         packet += bytearray(blocks[packet_number])
 
         # calculate check sum and append it to packet
-        calculated_check_sum = None
-        if check_sum_type == CheckSumEnum.algebraic:
-            calculated_check_sum = algebraic_check_sum(blocks[packet_number])
-        elif check_sum_type == CheckSumEnum.crc:
-            calculated_check_sum = crc_check_sum(blocks[packet_number])
-
+        calculated_check_sum = calculate_check_sum(packet, check_sum_type)
         packet += bytearray(calculated_check_sum)
 
         # append packet to packet list
@@ -142,43 +118,110 @@ def fill_block_with_sub(block: bytes):
     return bytes(block)
 
 
+def calculate_check_sum(data_block: bytes, check_sum_type: CheckSumEnum):
+    if check_sum_type == CheckSumEnum.algebraic:
+        return check_sum.algebraic_check_sum(data_block)
+    else:
+        return check_sum.crc_check_sum(data_block)
+
+
 def receive(serial_port: ser.Serial, check_sum_type: CheckSumEnum) -> bytes:
     result = bytearray()
     # Wait for sender response
     for i in range(20):
         serial_port.write(check_sum_type.value)
-        # read packet
-        packet = None
+        packet_number = 1
+        while True:
+            try:
+                data_block = read_and_check_packet(serial_port, packet_number, check_sum_type)
+                result += bytearray(data_block)
+                print("Received block:")
+                print(data_block)
+                print(f"{packet_number} Sending ACK")
+                serial_port.write(ACK)
+                packet_number += 1
+            except NAKException:
+                serial_port.read(serial_port.in_waiting)
+                print(f"{packet_number} Sending NAK")
+                serial_port.write(NAK)
+            except EOTHeaderException:
+                serial_port.write(ACK)
+                return bytes(result)
+            except SenderDoesNotAcceptTransferException:
+                break
+
+    raise SenderDoesNotAcceptTransferException
 
 
-def read_package(serial_port: ser.Serial, check_sum_type: CheckSumEnum):
-    if check_sum_type == CheckSumEnum.algebraic:
-        packet = serial_port.read(132)
-    else:
-        packet = serial_port.read(133)
+def read_and_check_packet(serial_port: ser.Serial, packet_number: int, check_sum_type: CheckSumEnum) -> bytes:
+    check_header(serial_port, packet_number)
+    # Calculate check sum and extract data data_block
+    data_block = serial_port.read(128)
+    message_sum = read_check_sum(serial_port, check_sum_type)
+    calculated_sum = calculate_check_sum(data_block, check_sum_type)
 
-    if len(packet) == 0:
+    # Check is transmitted checksum is the same as calculated
+    if message_sum != calculated_sum:
+        raise WrongCheckSumException
+
+    return data_block
+
+
+def check_header(serial_port: ser.Serial, packet_number):
+    # Check is header good
+    header = serial_port.read(1)
+
+    if len(header) == 0:
         raise SenderDoesNotAcceptTransferException
+    elif header == EOT:
+        raise EOTHeaderException
+    elif header != SOH:
+        raise WrongHeaderException
 
-    packet_number = 1
-    response = None
-    while response != EOT:
+    message_number = int.from_bytes(serial_port.read(1), "big")
 
-        if packet[1] != SOH:
-            raise WrongHeaderException
-        elif packet_number % 255 != packet[2]:
-            raise WrongPacketNumberException
+    if packet_number % 255 != message_number:
+        raise WrongPacketNumberException
 
-        block = None
-        message_sum = None
-        if check_sum_type == CheckSumEnum.algebraic:
-            block = packet[2:-1]
-            message_sum = packet[-1]
-            calculated_sum = check_sum.algebraic_check_sum(block)
-        else:
-            block = packet[2:-2]
-            message_sum = packet[-2:]
-            calculated_sum = check_sum.crc_check_sum(block)
+    message_number = int.from_bytes(serial_port.read(1), "big")
+    if 255 - (packet_number % 255) != message_number:
+        raise WrongPacketNumberException
 
-        if message_sum != calculated_sum:
-            raise WrongCheckSumException
+
+def read_check_sum(serial_port: ser.Serial, check_sum_type: CheckSumEnum):
+    if check_sum_type == CheckSumEnum.algebraic:
+        return serial_port.read(1)
+    else:
+        return serial_port.read(2)
+
+
+class ReceiverDoesNotStartTransferException(Exception):
+    pass
+
+
+class SenderDoesNotAcceptTransferException(Exception):
+    pass
+
+
+class NAKException(Exception):
+    pass
+
+
+class WrongPacketNumberException(NAKException):
+    pass
+
+
+class WrongCheckSumException(NAKException):
+    pass
+
+
+class WrongHeaderException(NAKException):
+    pass
+
+
+class EOTHeaderException(Exception):
+    pass
+
+
+class ReceiverSendUnexpectedResponseException(Exception):
+    pass
