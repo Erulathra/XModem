@@ -43,10 +43,10 @@ def send(serial_port: ser.Serial, data: bytes):
         # when receiver sends NAK send packet another time
         response = serial_port.read(1)
         if response == ACK:
-            print(f"{packet_number} received ACK")
+            print(f"{packet_number + 1} received ACK")
             packet_number += 1
         elif response == NAK:
-            print(f"{packet_number} received NAK")
+            print(f"{packet_number + 1} received NAK")
             continue
         else:
             print(response)
@@ -154,11 +154,11 @@ def receive(serial_port: ser.Serial, check_sum_type: CheckSumEnum) -> bytes:
 
 
 def read_and_check_packet(serial_port: ser.Serial, packet_number: int, check_sum_type: CheckSumEnum) -> bytes:
-    check_header(serial_port, packet_number)
+    header = check_header(serial_port, packet_number)
     # Calculate check sum and extract data data_block
     data_block = serial_port.read(128)
     message_sum = read_check_sum(serial_port, check_sum_type)
-    calculated_sum = calculate_check_sum(data_block, check_sum_type)
+    calculated_sum = calculate_check_sum(bytes(header + bytearray(data_block)), check_sum_type)
 
     # Check is transmitted checksum is the same as calculated
     if message_sum != calculated_sum:
@@ -167,7 +167,7 @@ def read_and_check_packet(serial_port: ser.Serial, packet_number: int, check_sum
     return data_block
 
 
-def check_header(serial_port: ser.Serial, packet_number):
+def check_header(serial_port: ser.Serial, packet_number) -> bytearray:
     # Check is header good
     header = serial_port.read(1)
 
@@ -178,14 +178,19 @@ def check_header(serial_port: ser.Serial, packet_number):
     elif header != SOH:
         raise WrongHeaderException
 
-    message_number = int.from_bytes(serial_port.read(1), "big")
+    message_number = serial_port.read(1)
+    message_number_integer = int.from_bytes(message_number, "big")
 
-    if packet_number % 255 != message_number:
+    if packet_number % 255 != message_number_integer:
         raise WrongPacketNumberException
 
-    message_number = int.from_bytes(serial_port.read(1), "big")
-    if 255 - (packet_number % 255) != message_number:
+    message_number_completion = serial_port.read(1)
+    message_number_completion_integer = int.from_bytes(message_number_completion, "big")
+
+    if 255 - (packet_number % 255) != message_number_completion_integer:
         raise WrongPacketNumberException
+
+    return bytearray(header) + bytearray(message_number) + bytearray(message_number_completion)
 
 
 def read_check_sum(serial_port: ser.Serial, check_sum_type: CheckSumEnum):
