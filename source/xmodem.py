@@ -1,5 +1,5 @@
+import logging
 from enum import Enum
-from itertools import count
 
 import serial as ser
 
@@ -33,7 +33,7 @@ def initialize_serial(port: str, baudrate: int = 9600, timeout=3):
 
 def send(serial_port: ser.Serial, data: bytes):
     check_sum_type = wait_for_start_sending_and_get_check_sum_type(serial_port)
-    print(f"Starting transmission with {check_sum_type}")
+    logging.info(f"Starting transmission with {check_sum_type}")
     packets = prepare_packets(data, check_sum_type)
 
     packet_number = 0
@@ -43,18 +43,18 @@ def send(serial_port: ser.Serial, data: bytes):
         # when receiver sends NAK send packet another time
         response = serial_port.read(1)
         if response == ACK:
-            print(f"{packet_number + 1} received ACK")
+            logging.info(f"{packet_number + 1} received ACK")
             packet_number += 1
         elif response == NAK:
-            print(f"{packet_number + 1} received NAK")
+            logging.error(f"{packet_number + 1} received NAK")
             continue
         else:
-            print(response)
+            logging.error(response)
             raise ReceiverSendUnexpectedResponseException
 
     response = None
     while response != ACK:
-        print("writing EOT")
+        logging.info("writing EOT")
         serial_port.write(EOT)
         response = serial_port.read()
 
@@ -135,14 +135,14 @@ def receive(serial_port: ser.Serial, check_sum_type: CheckSumEnum) -> bytes:
             try:
                 data_block = read_and_check_packet(serial_port, packet_number, check_sum_type)
                 result += bytearray(data_block)
-                print("Received block:")
-                print(data_block)
-                print(f"{packet_number} Sending ACK")
+                logging.info("Received block:")
+                logging.info(data_block)
+                logging.info(f"{packet_number} Sending ACK")
                 serial_port.write(ACK)
                 packet_number += 1
             except NAKException:
                 serial_port.read(serial_port.in_waiting)
-                print(f"{packet_number} Sending NAK")
+                logging.error(f"{packet_number} Sending NAK")
                 serial_port.write(NAK)
             except EOTHeaderException:
                 serial_port.write(ACK)
@@ -162,6 +162,7 @@ def read_and_check_packet(serial_port: ser.Serial, packet_number: int, check_sum
 
     # Check is transmitted checksum is the same as calculated
     if message_sum != calculated_sum:
+        logging.error(f"sums aren't the same. Calculated: {calculated_sum}, received: {message_sum}")
         raise WrongCheckSumException
 
     return data_block
@@ -172,22 +173,26 @@ def check_header(serial_port: ser.Serial, packet_number) -> bytearray:
     header = serial_port.read(1)
 
     if len(header) == 0:
+        logging.error("Sender does not accept")
         raise SenderDoesNotAcceptTransferException
     elif header == EOT:
         raise EOTHeaderException
     elif header != SOH:
+        logging.error("Wrong header")
         raise WrongHeaderException
 
     message_number = serial_port.read(1)
     message_number_integer = int.from_bytes(message_number, "big")
 
     if packet_number % 255 != message_number_integer:
+        logging.error("Wrong packet number")
         raise WrongPacketNumberException
 
     message_number_completion = serial_port.read(1)
     message_number_completion_integer = int.from_bytes(message_number_completion, "big")
 
     if 255 - (packet_number % 255) != message_number_completion_integer:
+        logging.error("Wrong packet number completion")
         raise WrongPacketNumberException
 
     return bytearray(header) + bytearray(message_number) + bytearray(message_number_completion)

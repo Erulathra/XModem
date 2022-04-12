@@ -1,3 +1,5 @@
+import logging
+
 import xmodem
 
 
@@ -5,6 +7,9 @@ import xmodem
 # TODO: ALL USER INTERFACE SHOULD BE IN main.py
 
 def main():
+    # configure logger
+    logging.basicConfig(level=logging.DEBUG)
+
     test = "Litwo! Ojczyzno moja! Ty jestes jak zdrowie," \
            "Ile cie trzeba cenic, ten tylko sie dowie," \
            "Kto cie stracil. Dzis pieknosc twa w calej ozdobie " \
@@ -32,7 +37,7 @@ def main():
     baudrate = 9600
 
     serial_port = xmodem.initialize_serial(port_name, baudrate)
-    data = xmodem.receive(serial_port, xmodem.CheckSumEnum.algebraic)
+    data = xmodem.receive(serial_port, xmodem.CheckSumEnum.crc)
     print("Cała wiadomość: ")
     print(data.decode("ascii"))
     serial_port.close()

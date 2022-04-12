@@ -1,3 +1,5 @@
+import logging
+
 import xmodem
 
 
@@ -5,6 +7,9 @@ import xmodem
 # TODO: ALL USER INTERFACE SHOULD BE IN main.py
 
 def main():
+    # configure logger
+    logging.basicConfig(level=logging.DEBUG)
+
     test = "Litwo! Ojczyzno moja! Ty jestes jak zdrowie," \
            "Ile cie trzeba cenic, ten tylko sie dowie," \
            "Kto cie stracil. Dzis pieknosc twa w calej ozdobie " \
