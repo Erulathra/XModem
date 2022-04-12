@@ -1,8 +1,8 @@
-import check_sum as cs
-import serial as ser
-
 import xmodem
 
+
+# TODO: WARNING THIS FILE IS ONLY FOR TEST PURPOSES!!!
+# TODO: ALL USER INTERFACE SHOULD BE IN main.py
 
 def main():
     test = "Litwo! Ojczyzno moja! Ty jestes jak zdrowie," \
