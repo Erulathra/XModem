@@ -77,7 +77,7 @@ def prepare_packets(data: bytes, check_sum_type: CheckSumEnum) -> [bytes]:
     packets = []
     for packet_number in range(len(blocks)):
         packet = bytearray()
-        packet += create_header(check_sum_type, packet_number)
+        packet += create_header(packet_number)
 
         # fill last packet with ^z to make it 128 byte length
         if len(blocks[packet_number]) < 128:
@@ -87,7 +87,7 @@ def prepare_packets(data: bytes, check_sum_type: CheckSumEnum) -> [bytes]:
         packet += bytearray(blocks[packet_number])
 
         # calculate check sum and append it to packet
-        calculated_check_sum = calculate_check_sum(packet, check_sum_type)
+        calculated_check_sum = calculate_check_sum(blocks[packet_number], check_sum_type)
         packet += bytearray(calculated_check_sum)
 
         # append packet to packet list
@@ -96,7 +96,7 @@ def prepare_packets(data: bytes, check_sum_type: CheckSumEnum) -> [bytes]:
     return packets
 
 
-def create_header(check_sum_type: CheckSumEnum, packet_number: int) -> bytearray:
+def create_header(packet_number: int) -> bytearray:
     # append checkSumType
     header = bytearray(SOH)
 
@@ -158,7 +158,7 @@ def read_and_check_packet(serial_port: ser.Serial, packet_number: int, check_sum
     # Calculate check sum and extract data data_block
     data_block = serial_port.read(128)
     message_sum = read_check_sum(serial_port, check_sum_type)
-    calculated_sum = calculate_check_sum(bytes(header + bytearray(data_block)), check_sum_type)
+    calculated_sum = calculate_check_sum(data_block, check_sum_type)
 
     # Check is transmitted checksum is the same as calculated
     if message_sum != calculated_sum:
