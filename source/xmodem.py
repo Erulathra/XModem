@@ -32,6 +32,7 @@ def initialize_serial(port: str, baudrate: int = 9600, timeout=3):
 
 
 def send(serial_port: ser.Serial, data: bytes):
+    logging.info(f"Data length: {len(data)}")
     check_sum_type = wait_for_start_sending_and_get_check_sum_type(serial_port)
     logging.info(f"Starting transmission with {check_sum_type}")
     packets = prepare_packets(data, check_sum_type)
@@ -142,10 +143,12 @@ def receive(serial_port: ser.Serial, check_sum_type: CheckSumEnum) -> bytes:
                 packet_number += 1
             except NAKException:
                 serial_port.read(serial_port.in_waiting)
-                logging.error(f"{packet_number} Sending NAK")
+                logging.info(f"{packet_number} Sending NAK")
                 serial_port.write(NAK)
             except EOTHeaderException:
                 serial_port.write(ACK)
+                result = remove_ctrl_z(result)
+                logging.info(f"Data length: {len(result)}")
                 return bytes(result)
             except SenderDoesNotAcceptTransferException:
                 break
@@ -173,7 +176,7 @@ def check_header(serial_port: ser.Serial, packet_number) -> bytearray:
     header = serial_port.read(1)
 
     if len(header) == 0:
-        logging.error("Sender does not accept")
+        logging.warning("Sender does not accept")
         raise SenderDoesNotAcceptTransferException
     elif header == EOT:
         raise EOTHeaderException
@@ -203,6 +206,14 @@ def read_check_sum(serial_port: ser.Serial, check_sum_type: CheckSumEnum):
         return serial_port.read(1)
     else:
         return serial_port.read(2)
+
+
+def remove_ctrl_z(data: bytearray):
+    print(data[-1])
+    while data[-1] == 0x1A:
+        data.pop()
+
+    return data
 
 
 class ReceiverDoesNotStartTransferException(Exception):
