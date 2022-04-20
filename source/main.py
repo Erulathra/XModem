@@ -12,9 +12,12 @@ def main():
         (2) Odebrać pakiet
         [q - wyjście]\n> ''')
         match user_input:
-            case '1': send_packet()
-            case '2': receive_packet()
-            case _: continue
+            case '1':
+                send_packet()
+            case '2':
+                receive_packet()
+            case _:
+                continue
 
 
 def send_packet():
@@ -51,36 +54,37 @@ def receive_packet():
 
 
 def message_from_file(path):
-	with open(path, "r") as message_file:
-		result = ""
-		for line in message_file:
-			result += line
-	return result
+    with open(path, "r") as message_file:
+        result = ""
+        for line in message_file:
+            result += line
+    return result
 
 
 class Examples:
     invocation = "Litwo! Ojczyzno moja! Ty jestes jak zdrowie," \
-           "Ile cie trzeba cenic, ten tylko sie dowie," \
-           "Kto cie stracil. Dzis pieknosc twa w calej ozdobie " \
-           "Widze i opisuje, bo tesknie po tobie " \
-           "Panno swieta, co Jasnej bronisz Czestochowy " \
-           "I w Ostrej swiecisz Bramie! Ty, co grod zamkowy " \
-           "Nowogrodzki ochraniasz z jego wiernym ludem! " \
-           "Jak mnie dziecko do zdrowia powrocilas cudem, " \
-           "(Gdy od placzacej matki pod Twoja opieke " \
-           "Ofiarowany, martwa podnioslem powieke " \
-           "I zaraz moglem pieszo do Twych swiatyn progu " \
-           "Isc za wrocone zycie podziekowac Bogu), " \
-           "Tak nas powrocisz cudem na Ojczyzny lono. " \
-           "Tymczasem przenos moja dusze uteskniona " \
-           "Do tych pagorkow lesnych, do tych lak zielonych, " \
-           "Szeroko nad blekitnym Niemnem rozciagnionych; " \
-           "Do tych pol malowanych zbozem rozmaitem, " \
-           "Wyzlacanych pszenica, posrebrzanych zytem; " \
-           "Gdzie bursztynowy swierzop, gryka jak snieg biala, " \
-           "Gdzie panienskim rumiencem dziecielina pala, " \
-           "A wszystko przepasane jakby wstega, miedza " \
-           "Zielona, na niej z rzadka ciche grusze siedza."
+                 "Ile cie trzeba cenic, ten tylko sie dowie," \
+                 "Kto cie stracil. Dzis pieknosc twa w calej ozdobie " \
+                 "Widze i opisuje, bo tesknie po tobie " \
+                 "Panno swieta, co Jasnej bronisz Czestochowy " \
+                 "I w Ostrej swiecisz Bramie! Ty, co grod zamkowy " \
+                 "Nowogrodzki ochraniasz z jego wiernym ludem! " \
+                 "Jak mnie dziecko do zdrowia powrocilas cudem, " \
+                 "(Gdy od placzacej matki pod Twoja opieke " \
+                 "Ofiarowany, martwa podnioslem powieke " \
+                 "I zaraz moglem pieszo do Twych swiatyn progu " \
+                 "Isc za wrocone zycie podziekowac Bogu), " \
+                 "Tak nas powrocisz cudem na Ojczyzny lono. " \
+                 "Tymczasem przenos moja dusze uteskniona " \
+                 "Do tych pagorkow lesnych, do tych lak zielonych, " \
+                 "Szeroko nad blekitnym Niemnem rozciagnionych; " \
+                 "Do tych pol malowanych zbozem rozmaitem, " \
+                 "Wyzlacanych pszenica, posrebrzanych zytem; " \
+                 "Gdzie bursztynowy swierzop, gryka jak snieg biala, " \
+                 "Gdzie panienskim rumiencem dziecielina pala, " \
+                 "A wszystko przepasane jakby wstega, miedza " \
+                 "Zielona, na niej z rzadka ciche grusze siedza."
+
 
 if __name__ == "__main__":
     main()
