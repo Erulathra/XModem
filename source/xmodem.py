@@ -5,6 +5,7 @@ import serial as ser
 
 import check_sum
 
+# packet headers
 SOH = b'\x01'
 EOT = b'\x04'
 ACK = b'\x06'
@@ -19,6 +20,12 @@ class CheckSumEnum(Enum):
     crc = CRC
 
 
+# Code info:
+#   [UTIL] - small, self-describing function
+
+
+# [UTIL]
+# set up serial port parameters
 def initialize_serial(port: str, baudrate: int = 9600, timeout=3):
     serial_port = ser.Serial()
     serial_port.baudrate = baudrate
@@ -31,6 +38,7 @@ def initialize_serial(port: str, baudrate: int = 9600, timeout=3):
     return serial_port
 
 
+# creates and sends packets created from data on serial_port
 def send(serial_port: ser.Serial, data: bytes):
     logging.info(f"Data length: {len(data)}")
     check_sum_type = wait_for_start_sending_and_get_check_sum_type(serial_port)
@@ -60,8 +68,11 @@ def send(serial_port: ser.Serial, data: bytes):
         response = serial_port.read()
 
 
+# [UTIL]
+# check check sum type on serial port
 def wait_for_start_sending_and_get_check_sum_type(serial_port: ser.Serial) -> CheckSumEnum:
     for i in range(6):
+        # read header
         message = serial_port.read(1)
         if message == NAK:
             return CheckSumEnum.algebraic
@@ -71,8 +82,10 @@ def wait_for_start_sending_and_get_check_sum_type(serial_port: ser.Serial) -> Ch
     raise ReceiverDoesNotStartTransferException
 
 
+# splits packet into blocks, creates headers, makes datablock 128-bytes long,
+# calculates check sum and puts everything together
 def prepare_packets(data: bytes, check_sum_type: CheckSumEnum) -> [bytes]:
-    # split data intro 128 bytes long blocks
+    # split data into 128 bytes long blocks
     blocks = [data[i:i + 128] for i in range(0, len(data), 128)]
 
     packets = []
@@ -97,6 +110,8 @@ def prepare_packets(data: bytes, check_sum_type: CheckSumEnum) -> [bytes]:
     return packets
 
 
+# [UTIL]
+# creates header with info about check sum type and number of packet
 def create_header(packet_number: int) -> bytearray:
     # append checkSumType
     header = bytearray(SOH)
@@ -111,6 +126,8 @@ def create_header(packet_number: int) -> bytearray:
     return header
 
 
+# [UTIL]
+# makes block from message exactly 128 bytes long
 def fill_block_with_sub(block: bytes):
     block = bytearray(block)
     for i in range(128 - len(block)):
@@ -119,6 +136,8 @@ def fill_block_with_sub(block: bytes):
     return bytes(block)
 
 
+# [UTIL]
+# calculates checksum according to check_sum_type
 def calculate_check_sum(data_block: bytes, check_sum_type: CheckSumEnum):
     if check_sum_type == CheckSumEnum.algebraic:
         return check_sum.algebraic_check_sum(data_block)
@@ -126,6 +145,7 @@ def calculate_check_sum(data_block: bytes, check_sum_type: CheckSumEnum):
         return check_sum.crc_check_sum(data_block)
 
 
+# receives packet on serial_port with given check_sum_type
 def receive(serial_port: ser.Serial, check_sum_type: CheckSumEnum) -> bytes:
     result = bytearray()
     # Wait for sender response
@@ -156,6 +176,7 @@ def receive(serial_port: ser.Serial, check_sum_type: CheckSumEnum) -> bytes:
     raise SenderDoesNotAcceptTransferException
 
 
+# reads packet from serial port & does checksum
 def read_and_check_packet(serial_port: ser.Serial, packet_number: int, check_sum_type: CheckSumEnum) -> bytes:
     header = check_header(serial_port, packet_number)
     # Calculate check sum and extract data data_block
@@ -171,8 +192,14 @@ def read_and_check_packet(serial_port: ser.Serial, packet_number: int, check_sum
     return data_block
 
 
+# [UTIL]
+# checks whether:
+# - header flag
+# - message number
+# - message number completion integer
+# is correct
 def check_header(serial_port: ser.Serial, packet_number) -> bytearray:
-    # Check is header good
+    # Check if header is good
     header = serial_port.read(1)
 
     if len(header) == 0:
@@ -201,6 +228,8 @@ def check_header(serial_port: ser.Serial, packet_number) -> bytearray:
     return bytearray(header) + bytearray(message_number) + bytearray(message_number_completion)
 
 
+# [UTIL]
+# reads check sum according to check_sum_type
 def read_check_sum(serial_port: ser.Serial, check_sum_type: CheckSumEnum):
     if check_sum_type == CheckSumEnum.algebraic:
         return serial_port.read(1)
@@ -208,6 +237,8 @@ def read_check_sum(serial_port: ser.Serial, check_sum_type: CheckSumEnum):
         return serial_port.read(2)
 
 
+# [UTIL]
+# removes char created by clicking CTRL+Z
 def remove_ctrl_z(data: bytearray):
     print(data[-1])
     while data[-1] == 0x1A:
